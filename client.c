@@ -13,25 +13,30 @@ int sd;
 int datalen;
 char databuf[1024];
 
+/* Print error message and exit program */
+void err(char* msg) {
+  fputs(msg, stdout);
+  exit(-1);
+}
+
 int main(int argc, char *argv[]) {
 /* Create a datagram socket on which to receive. */
   sd = socket(AF_INET, SOCK_DGRAM, 0);
-  if(sd < 0) {
-    perror("Opening datagram socket error");
-    exit(1);
-  } else printf("Opening datagram socket....OK.\n");
+  if(sd < 0)
+    err("Opening datagram socket error\n");
+  else
+    printf("Opening datagram socket....OK.\n");
 
   /* Enable SO_REUSEADDR to allow multiple instances of this */
   /* application to receive copies of the multicast datagrams. */
 
   int reuse = 1;
   if(setsockopt(sd, SOL_SOCKET, SO_REUSEADDR, (char *)&reuse, sizeof(reuse)) < 0) {
-    perror("Setting SO_REUSEADDR error");
+    err("Setting SO_REUSEADDR error\n");
     close(sd);
-    exit(1);
   }
-  else printf("Setting SO_REUSEADDR...OK.\n");
-
+  else
+    printf("Setting SO_REUSEADDR...OK.\n");
 
   /* Bind to the proper port number with the IP address */
   /* specified as INADDR_ANY. */
@@ -40,11 +45,11 @@ int main(int argc, char *argv[]) {
   localSock.sin_port = htons(4321);
   localSock.sin_addr.s_addr = INADDR_ANY;
   if(bind(sd, (struct sockaddr*)&localSock, sizeof(localSock))) {
-    perror("Binding datagram socket error");
+    err("Binding datagram socket error\n");
     close(sd);
-    exit(1);
   }
-  else printf("Binding datagram socket...OK.\n");
+  else
+    printf("Binding datagram socket...OK.\n");
 
   /* Join the multicast group 226.1.1.1 on the local address*/
   /* interface. Note that this IP_ADD_MEMBERSHIP option must be */
@@ -52,44 +57,41 @@ int main(int argc, char *argv[]) {
   /* datagrams are to be received. */
   group.imr_multiaddr.s_addr = inet_addr("226.1.1.1");
   /* your ip address */
-  group.imr_interface.s_addr = inet_addr("172.20.10.2");
+  group.imr_interface.s_addr = inet_addr("127.0.0.1");
   /* IP_ADD_MEMBERSHIP:  Joins the multicast group specified */
   if(setsockopt(sd, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char *)&group, sizeof(group)) < 0) {
-    perror("Adding multicast group error");
+    err("Adding multicast group error\n");
     close(sd);
-    exit(1);
   }
-  else printf("Adding multicast group...OK.\n");
+  else
+    printf("Adding multicast group...OK.\n");
 
-  /* Open a file to write */
-  FILE* fp = fopen("output.txt", "w");
-  if (fp == NULL) {
-    perror("Failed to open file/n");
-    exit(1);
-  }
+  /* Open file */
+  FILE* fptr = fopen("output.txt", "w");
+  if (fptr == NULL)
+    err("Opening file error/n");
 
-  /* Read file content from server */
-  uint64_t recv_size = 0;
-  uint64_t total_size = 0;
+  /* Reading */
+  uint64_t return_size = 0;
+  uint64_t file_size = 0;
   datalen = sizeof(databuf);
   while (1) {
     bzero(databuf, datalen);
-    recv_size = recvfrom(sd, databuf, datalen, 0, NULL, NULL);
-    if (recv_size < 0) {
-      perror("Reading datagram message error");
+    return_size = recvfrom(sd, databuf, datalen, 0, NULL, NULL);
+    if (return_size < 0) {
+      err("Reading datagram message error\n");
       close(sd);
-      exit(1);
-    } else if(strcmp(databuf, "EOF") == 0) {
+    } else if(strcmp(databuf, "END") == 0)
       break;
-    } else {
-      fwrite(databuf, sizeof(char), recv_size, fp);
-      total_size += recv_size;
+    else {
+      fwrite(databuf, sizeof(char), return_size, fptr);
+      file_size += return_size;
     }
   }
 
-  /* Finish receiving file content from server */
+  /* Finish */
   printf("Reading datagram message...OK\n");
-  printf("Receive file size: %ldKb\n", total_size / 1024);
+  printf("Receive file size: %ldKb\n", file_size / 1024);
 
   return 0;
 }
