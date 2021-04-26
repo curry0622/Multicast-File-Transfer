@@ -71,33 +71,36 @@ int main(int argc, char *argv[])
 	else
 		printf("Adding multicast group...OK.\n");
 
-	/* Read from the socket. */
-  /* First get file size */
-  uint64_t file_size;
-	if(recvfrom(sd, &file_size, sizeof(file_size), 0, NULL, NULL) < 0)
-	{
-		perror("Reading datagram message error");
-		close(sd);
-		exit(1);
-	}
-	else
-	{
-		printf("Reading datagram message...OK.\n");
-		printf("Get file size from server: %ld\n", file_size);
-	}
+  /* Open a file to write */
+  FILE* fp = fopen("output.txt", "w");
+  if (fp == NULL) {
+    perror("Failed to open file/n");
+    exit(1);
+  }
 
-  /* Next get sample message */
+  /* Read file content from server */
+  uint64_t recv_size = 0;
+  uint64_t total_size = 0;
   datalen = sizeof(databuf);
-  if(recvfrom(sd, databuf, datalen, 0, NULL, NULL) < 0)
-	{
-		perror("Reading datagram message error");
-		close(sd);
-		exit(1);
-	}
-	else
-	{
-		printf("Reading datagram message...OK.\n");
-		printf("The message from multicast server is: \"%s\"\n", databuf);
-	}
+  while (1) {
+    bzero(databuf, datalen);
+    recv_size = recvfrom(sd, databuf, datalen, 0, NULL, NULL);
+    if (recv_size < 0) {
+      perror("Reading datagram message error");
+      close(sd);
+      exit(1);
+    } else if(strcmp(databuf, "EOF") == 0) {
+      break;
+    } else {
+      fwrite(databuf, sizeof(char), recv_size, fp);
+      total_size += recv_size;
+    }
+  }
+
+  /* Finish receiving file content from server */
+  printf("Reading datagram message...OK\n");
+  printf("Receive file size: %ldKb\n", total_size / 1024);
+
+
 	return 0;
 }

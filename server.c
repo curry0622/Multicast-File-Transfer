@@ -11,7 +11,7 @@
 struct in_addr localInterface;
 struct sockaddr_in groupSock;
 int sd;
-char databuf[1024] = "Multicast test message lol!";
+char databuf[1024];
 int datalen = sizeof(databuf);
 
 int main (int argc, char *argv[])
@@ -29,7 +29,13 @@ int main (int argc, char *argv[])
   struct stat file_stat;
   stat(file_name, &file_stat);
   uint64_t file_size = file_stat.st_size;
-  printf("File size: %ld\n", file_size);
+
+  /* Open file */
+  FILE* fp = fopen(file_name, "r");
+  if (fp == NULL) {
+    perror("[ERR] Failed to open file\n");
+    exit(1);
+  }
 
   /* Create a datagram socket on which to send. */
 	sd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -62,21 +68,21 @@ int main (int argc, char *argv[])
 	else
 	  printf("Setting the local interface...OK\n");
 
-  /* Send file size to client*/
-  if(sendto(sd, &file_size, sizeof(file_size), 0, (struct sockaddr*)&groupSock, sizeof(groupSock)) < 0) {
-    perror("Sending datagram message error");
-  } else {
-    printf("Sending file size...OK\n");
+  /* Sending file content to client */
+  uint64_t read_size = 0;
+  while((read_size = fread(databuf, sizeof(char), sizeof(databuf), fp))) {
+    if(sendto(sd, databuf, read_size, 0, (struct sockaddr*)&groupSock, sizeof(groupSock)) < 0) {
+      perror("Sending datagram message error");
+      exit(1);
+    }
   }
 
-	/* Send a message to the multicast group specified by the*/
-	/* groupSock sockaddr structure. */
-	if(sendto(sd, databuf, datalen, 0, (struct sockaddr*)&groupSock, sizeof(groupSock)) < 0)
-	{
-		perror("Sending datagram message error");
-	}
-	else
-	  printf("Sending datagram message...OK\n");
+  /* Send end message */
+  sendto(sd, "EOF", sizeof("EOF"), 0, (struct sockaddr *) &groupSock, sizeof(groupSock));
+
+  /* Print file size */
+  printf("Sending datagram message...OK\n");
+  printf("File size: %ldKb\n", file_size / 1024);
 
 	/* Try the re-read from the socket if the loopback is not disable
 	if(read(sd, databuf, datalen) < 0)
